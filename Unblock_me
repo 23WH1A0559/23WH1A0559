@@ -1,1 +1,260 @@
 
+import tkinter as tk
+
+class Block:
+    def __init__(self, canvas, name, start, end, is_horizontal):
+        self.canvas = canvas
+        self.name = name
+        self.start = start  # Tuple (row, col)
+        self.end = end      # Tuple (row, col)
+        self.is_horizontal = is_horizontal
+        self.id = None
+        self.create_block()
+
+    def create_block(self):
+        x1, y1 = self.start[1] * 100, self.start[0] * 100
+        x2, y2 = (self.end[1] + 1) * 100, (self.end[0] + 1) * 100
+        self.id = self.canvas.create_rectangle(x1, y1, x2, y2, fill="blue" if self.name != 'R' else "red")
+
+    def move(self, dx, dy):
+        self.start = (self.start[0] + dy, self.start[1] + dx)
+        self.end = (self.end[0] + dy, self.end[1] + dx)
+        self.canvas.move(self.id, dx * 100, dy * 100)
+
+class UnblockMeGame:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Unblock Me")
+        self.level = 1
+        self.difficulty = 'Beginner'
+        self.create_start_page()
+
+    def create_start_page(self):
+        # Clear the window
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        # Set background color for the start page
+        self.root.configure(background='blue')
+
+        # Create a welcome label with increased font size
+        welcome_label = tk.Label(self.root, text="Welcome to Unblock Me!", font=("Helvetica", 24, "bold"), bg='blue')
+        welcome_label.pack(pady=20)
+
+        # Create a circular button for classic mode
+        classic_mode_button = tk.Button(self.root, text="Classic Mode", command=self.show_difficulty_options, font=("Helvetica", 16, "bold"), bg='black', fg='pink', width=10, height=5)
+        classic_mode_button.pack(pady=10)
+        classic_mode_button.config(borderwidth=0, highlightthickness=0)
+
+    def show_difficulty_options(self):
+        # Clear the window
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        # Set background color for the difficulty selection page
+        self.root.configure(background='blue')
+
+        # Create a difficulty selection label
+        difficulty_label = tk.Label(self.root, text="Select Difficulty Level", font=("Helvetica", 16), bg='blue')
+        difficulty_label.pack(pady=20)
+
+        # Create buttons for each difficulty level
+        beginner_button = tk.Button(self.root, text="Beginner", command=lambda: self.show_levels('Beginner'), font=("Helvetica", 14), bg='black', fg='pink')
+        beginner_button.pack(pady=10)
+
+        medium_button = tk.Button(self.root, text="Medium", command=lambda: self.show_levels('Medium'), font=("Helvetica", 14), bg='black', fg='pink')
+        medium_button.pack(pady=10)
+
+        hard_button = tk.Button(self.root, text="Hard", command=lambda: self.show_levels('Hard'), font=("Helvetica", 14), bg='black', fg='pink')
+        hard_button.pack(pady=10)
+
+    def show_levels(self, difficulty):
+        self.difficulty = difficulty
+        # Clear the window
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        # Set background color for the levels selection page
+        self.root.configure(background='blue')
+
+        # Create a levels selection label
+        levels_label = tk.Label(self.root, text=f"Select Level ({difficulty})", font=("Helvetica", 16), bg='blue')
+        levels_label.pack(pady=20)
+
+        # Create buttons for specific levels
+        for level in range(1, 4):  # Example: 3 levels per difficulty
+            level_button = tk.Button(self.root, text=f"Level-{level}", command=lambda l=level: self.start_game(l), font=("Helvetica", 14), bg='black', fg='pink')
+            level_button.pack(pady=10)
+
+        # Create a back button to go to the previous menu
+        back_button = tk.Button(self.root, text="Back", command=self.show_difficulty_options, font=("Helvetica", 14), bg='black', fg='pink')
+        back_button.pack(pady=10)
+
+    def start_game(self, level):
+        self.level = level
+        # Clear the window
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        # Set background color for the game page
+        self.root.configure(background='pink')
+
+        # Create a label for level indication
+        self.level_label = tk.Label(self.root, text=f"{self.difficulty} - Level-{self.level}", font=("Helvetica", 16), bg='pink')
+        self.level_label.pack(pady=10)
+
+        # Create the canvas for the game
+        self.canvas = tk.Canvas(self.root, width=600, height=600)
+        self.canvas.pack()
+        
+        self.blocks = {}
+        self.red_block = None
+        self.selected_block = None
+        self.game_won = False
+        
+        self.create_grid()
+        self.setup_controls()
+        self.generate_blocks()
+
+    def create_grid(self):
+        for i in range(6):
+            for j in range(6):
+                self.canvas.create_rectangle(i * 100, j * 100, (i + 1) * 100, (j + 1) * 100, outline="black")
+
+    def setup_controls(self):
+        self.canvas.bind("<Button-1>", self.block_selected)
+        self.root.bind("<Key>", self.key_pressed)
+
+    def block_selected(self, event):
+        if self.game_won:
+            return
+
+        x, y = event.x // 100, event.y // 100
+        for block in self.blocks.values():
+            if block.start[0] <= y <= block.end[0] and block.start[1] <= x <= block.end[1]:
+                self.selected_block = block
+                print(f"Selected block: {self.selected_block.name}")
+                break
+
+    def key_pressed(self, event):
+        if self.game_won or not self.selected_block:
+            return
+
+        key = event.keysym
+        move_map = {
+            'Up': (0, -1), 'Down': (0, 1), 'Left': (-1, 0), 'Right': (1, 0)
+        }
+
+        if key in move_map:
+            dx, dy = move_map[key]
+            if self.selected_block.is_horizontal and dy != 0:
+                return
+            if not self.selected_block.is_horizontal and dx != 0:
+                return
+            if self.can_move(self.selected_block, dx, dy):
+                self.selected_block.move(dx, dy)
+                if self.is_solved():
+                    self.show_win_message()
+
+    def can_move(self, block, dx, dy):
+        new_start = (block.start[0] + dy, block.start[1] + dx)
+        new_end = (block.end[0] + dy, block.end[1] + dx)
+        
+        if not (0 <= new_start[0] < 6 and 0 <= new_start[1] < 6 and 0 <= new_end[0] < 6 and 0 <= new_end[1] < 6):
+            return False
+
+        for other_block in self.blocks.values():
+            if other_block is block:
+                continue
+            if self.is_overlapping(new_start, new_end, other_block):
+                return False
+        return True
+
+    def is_overlapping(self, new_start, new_end, block):
+        block_positions = set()
+        if block.is_horizontal:
+            block_positions = {(block.start[0], col) for col in range(block.start[1], block.end[1] + 1)}
+        else:
+            block_positions = {(row, block.start[1]) for row in range(block.start[0], block.end[0] + 1)}
+
+        new_positions = set()
+        if self.selected_block.is_horizontal:
+            new_positions = {(new_start[0], col) for col in range(new_start[1], new_end[1] + 1)}
+        else:
+            new_positions = {(row, new_start[1]) for row in range(new_start[0], new_end[0] + 1)}
+
+        return bool(new_positions & block_positions)
+
+    def is_solved(self):
+        return self.red_block.end[1] == 5
+
+    def show_win_message(self):
+        self.game_won = True
+        self.canvas.create_text(300, 300, text="You Win!", font=("Arial", 24), fill="green")
+        self.root.after(2000, self.show_level_options)
+
+    def show_level_options(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        self.root.configure(background='pink')
+
+        win_label = tk.Label(self.root, text="You Win!", font=("Helvetica", 16), bg='pink')
+        win_label.pack(pady=20)
+
+        next_level_button = tk.Button(self.root, text="Next Level", command=self.next_level, font=("Helvetica", 14), bg='black', fg='pink')
+        next_level_button.pack(pady=10)
+
+        home_button = tk.Button(self.root, text="Home", command=self.create_start_page, font=("Helvetica", 14), bg='black', fg='pink')
+        home_button.pack(pady=10)
+
+    def next_level(self):
+        self.level += 1
+        self.start_game(self.level)
+
+    def generate_blocks(self):
+        block_configs = []
+        if self.difficulty == 'Beginner':
+            if self.level == 1:
+                block_configs = [
+                    ('R', (2, 0), (2, 1), True),
+                    ('A', (1, 2), (2, 2), False),
+                    ('B', (1, 3), (2, 3), False),
+                    ('C', (3, 2), (3, 3), True),
+                ]
+            elif self.level == 2:
+                block_configs = [
+                    ('R', (2, 1), (2, 2), True),
+                    ('A', (1, 1), (2, 1), False),
+                    ('B', (3, 3), (4, 3), False),
+                    ('C', (3, 4), (3, 5), True),
+                    ('D', (0, 4), (0, 5), True),
+                ]
+            elif self.level == 3:
+                block_configs = [
+                    ('R', (2, 2), (2, 3), True),
+                    ('A', (0, 0), (0, 1), True),
+                    ('B', (0, 4), (1, 4), False),
+                    ('C', (4, 2), (4, 3), True),
+                    ('D', (3, 0), (4, 0), False),
+                ]
+        elif self.difficulty == 'Medium':
+            # Add block configurations for Medium difficulty levels here
+            pass
+        elif self.difficulty == 'Hard':
+            # Add block configurations for Hard difficulty levels here
+            pass
+        
+        for name, start, end, is_horizontal in block_configs:
+            block = Block(self.canvas, name, start, end, is_horizontal)
+            self.add_block(block)
+
+    def add_block(self, block):
+        self.blocks[block.name] = block
+        if block.name == 'R':
+            self.red_block = block
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = UnblockMeGame(root)
+    root.mainloop()
